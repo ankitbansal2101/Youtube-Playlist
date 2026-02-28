@@ -1,0 +1,16 @@
+# YouTube API
+google-auth-oauthlib>=1.2.0
+google-auth-httplib2>=0.2.0
+google-api-python-client>=2.100.0
+
+# Image / OCR (screenshot scraper)
+Pillow>=10.0.0
+pytesseract>=0.3.10
+# Optional: easyocr for better accuracy on stylized text (uncomment if needed)
+# easyocr>=1.7.0
+
+# UI
+flask>=3.0.0
+
+# Utilities
+python-dotenv>=1.0.0

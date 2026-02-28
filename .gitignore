@@ -1,0 +1,27 @@
+# Credentials - never commit
+client_secret*.json
+youtube_credentials.pickle
+credentials/
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+
+# Screenshots / user data (optional - remove if you want to track)
+screenshots/
+uploads/
+*.pickle
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store

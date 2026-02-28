@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block body %}
+<h1>Sonic Sesh</h1>
+<p class="caption">Upload song screenshots → get weighted suggestions → push to a YouTube playlist.</p>
+
+{% if auth_ok %}
+<div class="flash success">YouTube credentials saved. You're all set.</div>
+{% endif %}
+{% if playlist_link %}
+<div class="flash success">Playlist created. <a href="{{ playlist_link }}" target="_blank" rel="noopener">Open playlist</a>{% if failed_count %} ({{ failed_count }} song(s) could not be added){% endif %}.</div>
+{% endif %}
+{% if error %}
+<div class="flash error">
+  {% if error == 'auth' %}Authenticate YouTube first (sidebar).{% endif %}
+  {% if error == 'no_songs' %}Select at least one song.{% endif %}
+  {% if error == 'no_client_secret' %}Add <code>client_secret.json</code> to the project folder first.{% endif %}
+  {% if error not in ['auth', 'no_songs', 'no_client_secret'] %}{{ error }}{% endif %}
+</div>
+{% endif %}
+
+<div class="sidebar">
+  <strong>YouTube</strong>
+  {% if credentials_loaded %}
+  <p>Credentials loaded. <a href="{{ url_for('auth_youtube') }}" class="btn secondary">Re-authenticate</a></p>
+  {% else %}
+  {% if credentials_file_missing %}
+  <p>Add <code>client_secret.json</code> (Google Cloud OAuth) to the project folder.</p>
+  {% endif %}
+  <p><a href="{{ url_for('auth_youtube') }}" class="btn">Authenticate YouTube</a> (opens browser)</p>
+  {% endif %}
+</div>
+
+<h2>1. Song screenshots</h2>
+<form action="{{ url_for('scrape') }}" method="post" enctype="multipart/form-data">
+  <section>
+    <label>Input</label>
+    <label><input type="radio" name="mode" value="folder" checked> Use screenshots folder: <code>{{ screenshots_dir }}</code></label>
+    <label><input type="radio" name="mode" value="upload"> Upload images</label>
+  </section>
+  <section id="upload-fields" style="display: none;">
+    <label for="screenshots">Choose screenshots (multiple)</label>
+    <input type="file" id="screenshots" name="screenshots" accept=".png,.jpg,.jpeg,.webp" multiple>
+  </section>
+  <section>
+    <label for="min_weight">Min weight (times a song must appear)</label>
+    <input type="number" id="min_weight" name="min_weight" value="1" min="1" max="5">
+  </section>
+  <button type="submit">Run scraper and get weighted suggestions</button>
+</form>
+
+<h2>2. Suggestions</h2>
+{% if suggestions %}
+<p>Weighted suggestions (higher = appeared in more screenshots). Select songs to add to the playlist below.</p>
+<form action="{{ url_for('create_playlist') }}" method="post">
+  <div class="checkbox-list">
+    {% for song, weight, num_sources in suggestions %}
+    <label><input type="checkbox" name="songs" value="{{ song }}"> {{ song }} <small>(weight: {{ weight }})</small></label>
+    {% endfor %}
+  </div>
+  <p><button type="button" onclick="document.querySelectorAll('input[name=songs]').forEach(c => c.checked = true)">Select all</button>
+     <button type="button" onclick="document.querySelectorAll('input[name=songs]').forEach(c => c.checked = false)">Clear</button></p>
+
+  <h2>3. Create YouTube playlist</h2>
+  <section>
+    <label for="playlist_title">Playlist title</label>
+    <input type="text" id="playlist_title" name="playlist_title" value="Sonic Sesh auto-gen {{ now }}">
+  </section>
+  <section>
+    <label for="playlist_description">Description</label>
+    <textarea id="playlist_description" name="playlist_description">Auto-generated from friend screenshots.</textarea>
+  </section>
+  <section>
+    <label for="privacy">Privacy</label>
+    <select id="privacy" name="privacy">
+      <option value="public">Public</option>
+      <option value="unlisted">Unlisted</option>
+      <option value="private">Private</option>
+    </select>
+  </section>
+  <button type="submit">Create playlist and add songs</button>
+</form>
+{% else %}
+<p>Run the scraper above (upload images or add files to the screenshots folder first).</p>
+{% endif %}
+
+<script>
+  document.querySelectorAll('input[name="mode"]').forEach(function(r) {
+    r.addEventListener('change', function() {
+      document.getElementById('upload-fields').style.display = this.value === 'upload' ? 'block' : 'none';
+    });
+  });
+</script>
+{% endblock %}
