@@ -2,8 +2,11 @@
 
 {% block body %}
 <h1>Sonic Sesh</h1>
-<p class="caption">Upload song screenshots → get weighted suggestions → push to a YouTube playlist.</p>
+<p class="caption">Upload song screenshots → get weighted suggestions → optional AI recommendations → push to a YouTube playlist.</p>
 
+{% if request.args.get('llm') == 'ok' %}
+<div class="flash success">AI recommendations generated. Select them below if you want them on the playlist.</div>
+{% endif %}
 {% if auth_ok %}
 <div class="flash success">YouTube credentials saved. You're all set.</div>
 {% endif %}
@@ -15,7 +18,8 @@
   {% if error == 'auth' %}Authenticate YouTube first (sidebar).{% endif %}
   {% if error == 'no_songs' %}Select at least one song.{% endif %}
   {% if error == 'no_client_secret' %}Add <code>client_secret.json</code> to the project folder first.{% endif %}
-  {% if error not in ['auth', 'no_songs', 'no_client_secret'] %}{{ error }}{% endif %}
+  {% if error == 'no_suggestions_for_llm' %}Run the scraper first, then generate AI recommendations.{% endif %}
+  {% if error not in ['auth', 'no_songs', 'no_client_secret', 'no_suggestions_for_llm'] %}{{ error }}{% endif %}
 </div>
 {% endif %}
 
@@ -52,12 +56,30 @@
 <h2>2. Suggestions</h2>
 {% if suggestions %}
 <p>Weighted suggestions (higher = appeared in more screenshots). Select songs to add to the playlist below.</p>
+
+<h3>AI recommendations (optional)</h3>
+<p>Uses OpenAI from your seeds (set <code>OPENAI_API_KEY</code> in <code>.env</code> or the environment). Re-run scraper clears previous AI picks.</p>
+<form action="{{ url_for('llm_recommendations_route') }}" method="post" style="margin-bottom: 1rem;">
+  <label for="llm_count">How many AI suggestions</label>
+  <input type="number" id="llm_count" name="llm_count" value="10" min="1" max="30" style="width: 5rem;">
+  <button type="submit">Generate AI recommendations</button>
+</form>
+
 <form action="{{ url_for('create_playlist') }}" method="post">
+  <h3>From screenshots</h3>
   <div class="checkbox-list">
     {% for song, weight, num_sources in suggestions %}
-    <label><input type="checkbox" name="songs" value="{{ song }}"> {{ song }} <small>(weight: {{ weight }})</small></label>
+    <label><input type="checkbox" name="songs" value="{{ song|e }}"> {{ song }} <small>(weight: {{ weight }})</small></label>
     {% endfor %}
   </div>
+  {% if llm_recommendations %}
+  <h3>From AI</h3>
+  <div class="checkbox-list">
+    {% for song in llm_recommendations %}
+    <label><input type="checkbox" name="songs" value="{{ song|e }}"> {{ song }} <small>(AI)</small></label>
+    {% endfor %}
+  </div>
+  {% endif %}
   <p><button type="button" onclick="document.querySelectorAll('input[name=songs]').forEach(c => c.checked = true)">Select all</button>
      <button type="button" onclick="document.querySelectorAll('input[name=songs]').forEach(c => c.checked = false)">Clear</button></p>
 

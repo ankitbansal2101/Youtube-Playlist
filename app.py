@@ -13,6 +13,7 @@ from suggestions import (
     get_suggestions_from_directory,
     get_suggestions_from_uploads,
 )
+from llm_recommendations import generate_recommendations
 from youtube_client import (
     authenticate_youtube,
     load_youtube_client,
@@ -31,6 +32,7 @@ def index():
     return render_template(
         "index.html",
         suggestions=suggestions,
+        llm_recommendations=session.get("llm_recommendations", []),
         credentials_loaded=PICKLE_FILE.exists(),
         credentials_file_missing=not CREDENTIALS_FILE.exists(),
         screenshots_dir=SCREENSHOTS_DIR,
@@ -64,7 +66,27 @@ def scrape():
 
     # Store (song, weight, num_sources) for template (sources list not needed in UI)
     session["suggestions"] = [(s[0], s[1], len(s[2])) for s in suggestions]
+    session.pop("llm_recommendations", None)
     return redirect(url_for("index"))
+
+
+@app.route("/llm-recommendations", methods=["POST"])
+def llm_recommendations_route():
+    suggestions = session.get("suggestions", [])
+    if not suggestions:
+        return redirect(url_for("index") + "?error=no_suggestions_for_llm")
+    try:
+        count = int(request.form.get("llm_count", 10))
+    except ValueError:
+        count = 10
+    # Weighted order: pass song titles, bias toward higher-weight seeds
+    seeds = [s[0] for s in sorted(suggestions, key=lambda x: -x[1])][:40]
+    try:
+        recs = generate_recommendations(seeds, count=count)
+        session["llm_recommendations"] = recs
+        return redirect(url_for("index") + "?llm=ok")
+    except Exception as e:
+        return redirect(url_for("index") + f"?error={request.quote(str(e))}")
 
 
 @app.route("/playlist", methods=["POST"])

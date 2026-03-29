@@ -17,6 +17,14 @@ YOUTUBE_SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
 MIN_SONG_LENGTH = 3
 MAX_SONG_LENGTH = 200
 
+# LLM (optional) – set OPENAI_API_KEY; optional OPENAI_RECOMMEND_MODEL (default gpt-4o-mini)
+# Load .env from project root when present
+try:
+    from dotenv import load_dotenv
+    load_dotenv(PROJECT_ROOT / ".env")
+except ImportError:
+    pass
+
 # Ensure dirs exist
 SCREENSHOTS_DIR.mkdir(exist_ok=True)
 UPLOADS_DIR.mkdir(exist_ok=True)

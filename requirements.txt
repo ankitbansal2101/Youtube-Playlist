@@ -14,3 +14,6 @@ flask>=3.0.0
 
 # Utilities
 python-dotenv>=1.0.0
+
+# Optional: AI recommendations (set OPENAI_API_KEY)
+openai>=1.40.0
