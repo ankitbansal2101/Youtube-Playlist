@@ -93,7 +93,9 @@ Nothing is stored in a database or file except: (1) OAuth credentials (`youtube_
 | `templates/` | Flask HTML (base + index). |
 | `screenshots/` | Default folder for screenshot images (created if missing). |
 | `client_secret.json` | Google OAuth client secret (you add this; not in git). |
-| `youtube_credentials.pickle` | Stored OAuth tokens after first login (not in git). |
+| `youtube_credentials.pickle` | Stored OAuth tokens after first login (local only; not in git). |
+| `vercel.json` / `runtime.txt` / `.vercelignore` | Vercel deployment. |
+| `.env.example` | Example environment variables (copy to `.env` locally). |
 
 ### Tech stack
 
@@ -140,7 +142,49 @@ source .venv/bin/activate   # if not already
 python app.py
 ```
 
-Open **http://127.0.0.1:5000**. Authenticate YouTube once, then add screenshots, run the scraper, choose songs, and create the playlist.
+Open **http://127.0.0.1:5000** (or the port shown in the terminal). Authenticate YouTube once, then add screenshots, run the scraper, choose songs, and create the playlist.
+
+---
+
+## Deploy on Vercel
+
+The repo includes **`vercel.json`**, **`runtime.txt`**, and **`.vercelignore`** so you can deploy the Flask app as a serverless Python project.
+
+### Limitations on Vercel
+
+- **Tesseract OCR** is not available on the default Vercel Python runtime, so **image scraping usually will not work** in production unless you add a custom solution. **AI recommendations** (`OPENAI_API_KEY`) still work; for OCR, run the app locally or extend the deployment (e.g. container / external OCR).
+- **Ephemeral disk:** uploads go under `/tmp` and do not persist across invocations.
+- **YouTube tokens** are stored in the **signed session cookie** after web OAuth (not on disk). Use a strong **`FLASK_SECRET_KEY`** or users will lose auth when the secret changes.
+
+### Google OAuth for production
+
+1. In Google Cloud Console, create an OAuth client of type **Web application** (not only Desktop).
+2. Under **Authorized redirect URIs**, add:
+   - `https://<your-project>.vercel.app/auth/youtube/callback`
+   - Add your production domain too if you use a custom domain.
+3. Copy the client JSON. In the Vercel project → **Settings → Environment Variables**, add:
+   - **`GOOGLE_CLIENT_SECRET_JSON`** – entire JSON as a single-line string (the `web` client object is fine).
+   - **`FLASK_SECRET_KEY`** – long random string (e.g. `openssl rand -hex 32`).
+   - **`OPENAI_API_KEY`** – if you use AI recommendations.
+4. **`PUBLIC_BASE_URL`** – optional. If unset, the app uses `https://` + **`VERCEL_URL`** (set automatically by Vercel). Set `PUBLIC_BASE_URL` if you use a custom domain (e.g. `https://playlist.example.com`).
+
+### Deploy
+
+1. Install the [Vercel CLI](https://vercel.com/docs/cli) or connect the GitHub repo in the Vercel dashboard.
+2. Import the project and deploy; Vercel will run `pip install -r requirements.txt` via the Python build.
+
+```bash
+npx vercel
+```
+
+### Files added for Vercel
+
+| File | Purpose |
+|------|--------|
+| `vercel.json` | Routes all traffic to the Flask entry (`app.py`). |
+| `runtime.txt` | Python version for the build. |
+| `.vercelignore` | Skips venv, secrets, and local data from uploads. |
+| `.env.example` | Lists env vars to mirror in the Vercel dashboard. |
 
 ---
 

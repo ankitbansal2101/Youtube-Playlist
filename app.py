@@ -1,46 +1,62 @@
 """
 Flask UI: upload screenshots → scrape → weighted suggestions → create YouTube playlist.
 """
+import os
 from datetime import datetime
 from pathlib import Path
 
 from flask import Flask, redirect, render_template, request, session, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 
-from config import CREDENTIALS_FILE, PICKLE_FILE, SCREENSHOTS_DIR
+from config import (
+    CREDENTIALS_FILE,
+    IS_VERCEL,
+    PICKLE_FILE,
+    SCREENSHOTS_DIR,
+    get_public_base_url,
+    has_client_secret_config,
+)
 from scraper import scrape_directory, scrape_uploaded_files
 from suggestions import (
-    aggregate_songs,
     get_suggestions_from_directory,
     get_suggestions_from_uploads,
 )
 from llm_recommendations import generate_recommendations
 from youtube_client import (
     authenticate_youtube,
+    create_web_oauth_flow,
     load_youtube_client,
     build_playlist_from_songs,
+    youtube_credentials_ready,
 )
 
 app = Flask(__name__)
-app.secret_key = "sonic-sesh-secret-change-in-production"
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "sonic-sesh-secret-change-in-production")
+if IS_VERCEL:
+    app.config["SESSION_COOKIE_SECURE"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 
 @app.route("/")
 def index():
-    suggestions = session.get("suggestions", [])  # list of (song, weight, num_sources)
+    suggestions = session.get("suggestions", [])
     playlist_link = session.pop("playlist_link", None)
     failed_count = session.pop("playlist_failed", None)
     return render_template(
         "index.html",
         suggestions=suggestions,
         llm_recommendations=session.get("llm_recommendations", []),
-        credentials_loaded=PICKLE_FILE.exists(),
-        credentials_file_missing=not CREDENTIALS_FILE.exists(),
+        credentials_loaded=youtube_credentials_ready(dict(session)),
+        credentials_file_missing=not has_client_secret_config(),
         screenshots_dir=SCREENSHOTS_DIR,
         playlist_link=playlist_link,
         auth_ok=request.args.get("auth") == "ok",
         error=request.args.get("error"),
         failed_count=failed_count,
         now=datetime.now().strftime("%Y-%m-%d"),
+        is_vercel=IS_VERCEL,
+        public_base_url=get_public_base_url(),
     )
 
 
@@ -64,7 +80,6 @@ def scrape():
     else:
         suggestions = get_suggestions_from_directory(SCREENSHOTS_DIR, min_weight=min_weight)
 
-    # Store (song, weight, num_sources) for template (sources list not needed in UI)
     session["suggestions"] = [(s[0], s[1], len(s[2])) for s in suggestions]
     session.pop("llm_recommendations", None)
     return redirect(url_for("index"))
@@ -79,7 +94,6 @@ def llm_recommendations_route():
         count = int(request.form.get("llm_count", 10))
     except ValueError:
         count = 10
-    # Weighted order: pass song titles, bias toward higher-weight seeds
     seeds = [s[0] for s in sorted(suggestions, key=lambda x: -x[1])][:40]
     try:
         recs = generate_recommendations(seeds, count=count)
@@ -91,7 +105,7 @@ def llm_recommendations_route():
 
 @app.route("/playlist", methods=["POST"])
 def create_playlist():
-    if not PICKLE_FILE.exists():
+    if not youtube_credentials_ready(dict(session)):
         return redirect(url_for("index") + "?error=auth")
     chosen = request.form.getlist("songs")
     if not chosen:
@@ -117,6 +131,25 @@ def create_playlist():
 
 @app.route("/auth/youtube")
 def auth_youtube():
+    if not has_client_secret_config():
+        return redirect(url_for("index") + "?error=no_client_secret")
+
+    base = get_public_base_url()
+    if base:
+        redirect_uri = base.rstrip("/") + "/auth/youtube/callback"
+        try:
+            flow = create_web_oauth_flow(redirect_uri)
+            authorization_url, state = flow.authorization_url(
+                access_type="offline",
+                include_granted_scopes="true",
+                prompt="consent",
+            )
+            session["oauth_state"] = state
+            session["oauth_redirect_uri"] = redirect_uri
+            return redirect(authorization_url)
+        except Exception as e:
+            return redirect(url_for("index") + f"?error={request.quote(str(e))}")
+
     if not CREDENTIALS_FILE.exists():
         return redirect(url_for("index") + "?error=no_client_secret")
     try:
@@ -126,5 +159,26 @@ def auth_youtube():
         return redirect(url_for("index") + f"?error={request.quote(str(e))}")
 
 
+@app.route("/auth/youtube/callback")
+def auth_youtube_callback():
+    base = get_public_base_url()
+    if not base:
+        return redirect(url_for("index") + "?error=oauth")
+    if request.args.get("state") != session.get("oauth_state"):
+        return redirect(url_for("index") + "?error=oauth_state")
+    redirect_uri = session.get("oauth_redirect_uri") or (base.rstrip("/") + "/auth/youtube/callback")
+    try:
+        flow = create_web_oauth_flow(redirect_uri)
+        flow.fetch_token(authorization_response=request.url)
+        creds = flow.credentials
+        session["youtube_creds_json"] = creds.to_json()
+        session.pop("oauth_state", None)
+        session.pop("oauth_redirect_uri", None)
+        return redirect(url_for("index") + "?auth=ok")
+    except Exception as e:
+        return redirect(url_for("index") + f"?error={request.quote(str(e))}")
+
+
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get("PORT", "5000"))
+    app.run(debug=True, host="127.0.0.1", port=port)

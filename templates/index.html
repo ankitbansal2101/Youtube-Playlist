@@ -4,6 +4,10 @@
 <h1>Sonic Sesh</h1>
 <p class="caption">Upload song screenshots → get weighted suggestions → optional AI recommendations → push to a YouTube playlist.</p>
 
+{% if is_vercel %}
+<div class="flash warning">Running on <strong>Vercel</strong>: the server does not include <strong>Tesseract OCR</strong>, so “Run scraper” on images usually will not work here unless you add a custom layer. Use <strong>Generate AI recommendations</strong> (set <code>OPENAI_API_KEY</code>) or run scraping locally. YouTube sign-in uses a <strong>web redirect</strong>; add your Vercel URL under Authorized redirect URIs in Google Cloud (see README).</div>
+{% endif %}
+
 {% if request.args.get('llm') == 'ok' %}
 <div class="flash success">AI recommendations generated. Select them below if you want them on the playlist.</div>
 {% endif %}
@@ -17,9 +21,11 @@
 <div class="flash error">
   {% if error == 'auth' %}Authenticate YouTube first (sidebar).{% endif %}
   {% if error == 'no_songs' %}Select at least one song.{% endif %}
-  {% if error == 'no_client_secret' %}Add <code>client_secret.json</code> to the project folder first.{% endif %}
+  {% if error == 'no_client_secret' %}Add <code>client_secret.json</code> locally, or set <code>GOOGLE_CLIENT_SECRET_JSON</code> in Vercel environment variables (full JSON).{% endif %}
+  {% if error == 'oauth_state' %}OAuth state mismatch—try signing in again.{% endif %}
+  {% if error == 'oauth' %}OAuth callback failed (check redirect URI in Google Cloud).{% endif %}
   {% if error == 'no_suggestions_for_llm' %}Run the scraper first, then generate AI recommendations.{% endif %}
-  {% if error not in ['auth', 'no_songs', 'no_client_secret', 'no_suggestions_for_llm'] %}{{ error }}{% endif %}
+  {% if error not in ['auth', 'no_songs', 'no_client_secret', 'no_suggestions_for_llm', 'oauth_state', 'oauth'] %}{{ error|e }}{% endif %}
 </div>
 {% endif %}
 
@@ -29,9 +35,9 @@
   <p>Credentials loaded. <a href="{{ url_for('auth_youtube') }}" class="btn secondary">Re-authenticate</a></p>
   {% else %}
   {% if credentials_file_missing %}
-  <p>Add <code>client_secret.json</code> (Google Cloud OAuth) to the project folder.</p>
+  <p>Add <code>client_secret.json</code> locally or <code>GOOGLE_CLIENT_SECRET_JSON</code> on Vercel (Web application OAuth client).</p>
   {% endif %}
-  <p><a href="{{ url_for('auth_youtube') }}" class="btn">Authenticate YouTube</a> (opens browser)</p>
+  <p><a href="{{ url_for('auth_youtube') }}" class="btn">Authenticate YouTube</a>{% if public_base_url %} (redirect){% else %} (opens browser){% endif %}</p>
   {% endif %}
 </div>
 
@@ -39,10 +45,12 @@
 <form action="{{ url_for('scrape') }}" method="post" enctype="multipart/form-data">
   <section>
     <label>Input</label>
+    {% if not is_vercel %}
     <label><input type="radio" name="mode" value="folder" checked> Use screenshots folder: <code>{{ screenshots_dir }}</code></label>
-    <label><input type="radio" name="mode" value="upload"> Upload images</label>
+    {% endif %}
+    <label><input type="radio" name="mode" value="upload" {% if is_vercel %}checked{% endif %}> Upload images</label>
   </section>
-  <section id="upload-fields" style="display: none;">
+  <section id="upload-fields" style="display: {% if is_vercel %}block{% else %}none{% endif %};">
     <label for="screenshots">Choose screenshots (multiple)</label>
     <input type="file" id="screenshots" name="screenshots" accept=".png,.jpg,.jpeg,.webp" multiple>
   </section>
@@ -112,5 +120,10 @@
       document.getElementById('upload-fields').style.display = this.value === 'upload' ? 'block' : 'none';
     });
   });
+  {% if not is_vercel %}
+  if (document.querySelector('input[name="mode"][value="folder"]:checked')) {
+    document.getElementById('upload-fields').style.display = 'none';
+  }
+  {% endif %}
 </script>
 {% endblock %}

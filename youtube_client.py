@@ -1,6 +1,8 @@
 """
 YouTube API client: authenticate, create playlist, search videos, add to playlist.
+Local: desktop OAuth + pickle. Deployed (Vercel): web OAuth + Flask session JSON.
 """
+import json
 import os
 import pickle
 from datetime import datetime
@@ -9,12 +11,64 @@ from pathlib import Path
 import google_auth_oauthlib.flow
 import googleapiclient.discovery
 import googleapiclient.errors
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 
-from config import CREDENTIALS_FILE, PICKLE_FILE, YOUTUBE_SCOPES
+from config import (
+    CREDENTIALS_FILE,
+    PICKLE_FILE,
+    YOUTUBE_SCOPES,
+    get_public_base_url,
+    load_google_client_config,
+)
+
+
+def _client_config_for_web_flow(client_config: dict, redirect_uri: str) -> dict:
+    """Build a 'web' block for google_auth_oauthlib Flow (works with Web or Desktop JSON)."""
+    if "web" in client_config:
+        return client_config
+    if "installed" in client_config:
+        inst = client_config["installed"]
+        return {
+            "web": {
+                "client_id": inst["client_id"],
+                "client_secret": inst["client_secret"],
+                "auth_uri": inst.get("auth_uri", "https://accounts.google.com/o/oauth2/auth"),
+                "token_uri": inst.get("token_uri", "https://oauth2.googleapis.com/token"),
+                "redirect_uris": [redirect_uri],
+            }
+        }
+    raise ValueError("OAuth JSON must contain 'web' or 'installed'")
+
+
+def create_web_oauth_flow(redirect_uri: str):
+    """Flow for browser redirect (Vercel / HTTPS)."""
+    raw = load_google_client_config()
+    cfg = _client_config_for_web_flow(raw, redirect_uri)
+    return google_auth_oauthlib.flow.Flow.from_client_config(
+        cfg,
+        scopes=YOUTUBE_SCOPES,
+        redirect_uri=redirect_uri,
+    )
+
+
+def credentials_to_session_json(creds: Credentials) -> str:
+    return creds.to_json()
+
+
+def credentials_from_session_json(data: str) -> Credentials:
+    info = json.loads(data)
+    return Credentials.from_authorized_user_info(info, YOUTUBE_SCOPES)
+
+
+def refresh_session_credentials_if_needed(creds: Credentials) -> Credentials:
+    if creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+    return creds
 
 
 def authenticate_youtube():
-    """Run OAuth flow (browser) and save credentials. Returns YouTube API resource."""
+    """Run OAuth flow (local browser server) and save credentials. Returns YouTube API resource."""
     os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
     if not CREDENTIALS_FILE.exists():
         raise FileNotFoundError(
@@ -31,25 +85,44 @@ def authenticate_youtube():
 
 
 def load_youtube_client():
-    """Load previously saved credentials and return YouTube API resource."""
+    """Load credentials from Flask session (deployed), else pickle file."""
+    try:
+        from flask import has_request_context, session
+    except ImportError:
+        has_request_context = lambda: False
+        session = None
+
+    if has_request_context() and session is not None:
+        raw = session.get("youtube_creds_json")
+        if raw:
+            creds = credentials_from_session_json(raw)
+            creds = refresh_session_credentials_if_needed(creds)
+            session["youtube_creds_json"] = creds.to_json()
+            return googleapiclient.discovery.build("youtube", "v3", credentials=creds)
+
     if not PICKLE_FILE.exists():
         raise FileNotFoundError(
-            "No saved credentials. Run 'Authenticate' once in the UI (or call authenticate_youtube())."
+            "No saved credentials. Authenticate YouTube in the app first."
         )
     with open(PICKLE_FILE, "rb") as token:
         credentials = pickle.load(token)
     return googleapiclient.discovery.build("youtube", "v3", credentials=credentials)
 
 
+def youtube_credentials_ready(session_dict: dict) -> bool:
+    """Whether we have tokens (session JSON or pickle)."""
+    if session_dict and session_dict.get("youtube_creds_json"):
+        return True
+    return PICKLE_FILE.exists()
+
+
 def get_youtube():
-    """Use saved credentials if available; otherwise require auth."""
     if PICKLE_FILE.exists():
         return load_youtube_client()
     return authenticate_youtube()
 
 
 def create_playlist(youtube, title: str, description: str, privacy: str = "public"):
-    """Create a playlist. Returns (playlist_id, title)."""
     request = youtube.playlists().insert(
         part="snippet,status",
         body={
@@ -67,7 +140,6 @@ def create_playlist(youtube, title: str, description: str, privacy: str = "publi
 
 
 def add_video_to_playlist(youtube, playlist_id: str, video_id: str):
-    """Append one video to a playlist."""
     youtube.playlistItems().insert(
         part="snippet",
         body={
@@ -80,9 +152,6 @@ def add_video_to_playlist(youtube, playlist_id: str, video_id: str):
 
 
 def search_video(youtube, query: str, max_results: int = 1):
-    """
-    Search YouTube for a video by query. Returns video_id or None if not found.
-    """
     request = youtube.search().list(
         part="id",
         q=query,
@@ -103,10 +172,6 @@ def build_playlist_from_songs(
     playlist_description: str = "",
     privacy: str = "public",
 ):
-    """
-    Create a new playlist and add each song (search then add first result).
-    Returns (playlist_id, playlist_link, list of (song, video_id or None, error_msg)).
-    """
     datestr = datetime.now().strftime("%Y-%m-%d")
     title = playlist_title or f"Sonic Sesh auto-gen playlist {datestr}"
     desc = playlist_description or f"Auto-generated playlist – {datestr}"

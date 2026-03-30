@@ -1,0 +1,16 @@
+.venv
+venv
+env
+.env
+.env.local
+.git
+__pycache__
+*.pyc
+screenshots
+uploads
+client_secret.json
+youtube_credentials.pickle
+*.pickle
+.DS_Store
+.idea
+.vscode
