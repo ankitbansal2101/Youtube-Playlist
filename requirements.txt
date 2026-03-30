@@ -3,16 +3,12 @@ google-auth-oauthlib>=1.2.0
 google-auth-httplib2>=0.2.0
 google-api-python-client>=2.100.0
 
-# Images: OpenAI Vision when OPENAI_API_KEY is set (works on Vercel).
+# Images (encode for OpenAI Vision) + OpenAI (Vision + recommendations)
 Pillow>=10.0.0
-# Local fallback without OpenAI (needs system Tesseract installed):
-pytesseract>=0.3.10
+openai>=1.40.0
 
 # UI
 flask>=3.0.0
 
 # Utilities
 python-dotenv>=1.0.0
-
-# Optional: AI recommendations (set OPENAI_API_KEY)
-openai>=1.40.0

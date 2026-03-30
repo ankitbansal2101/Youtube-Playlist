@@ -160,7 +160,7 @@ def llm_recommendations_route():
 @app.route("/clear-suggestions", methods=["POST"])
 def clear_suggestions():
     """
-    scope=screenshots — remove weighted list from OCR and AI picks (AI depends on seeds).
+    scope=screenshots — remove weighted list from Vision scrape and AI picks (AI depends on seeds).
     scope=llm — remove only AI recommendations; keep screenshot suggestions.
     """
     scope = (request.form.get("scope") or "screenshots").strip().lower()
