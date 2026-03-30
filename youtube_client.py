@@ -14,13 +14,7 @@ import googleapiclient.errors
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 
-from config import (
-    CREDENTIALS_FILE,
-    PICKLE_FILE,
-    YOUTUBE_SCOPES,
-    get_public_base_url,
-    load_google_client_config,
-)
+from config import CREDENTIALS_FILE, PICKLE_FILE, YOUTUBE_SCOPES, load_google_client_config
 
 
 def _client_config_for_web_flow(client_config: dict, redirect_uri: str) -> dict:

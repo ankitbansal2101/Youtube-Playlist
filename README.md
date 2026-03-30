@@ -94,7 +94,7 @@ Nothing is stored in a database or file except: (1) OAuth credentials (`youtube_
 | `screenshots/` | Default folder for screenshot images (created if missing). |
 | `client_secret.json` | Google OAuth client secret (you add this; not in git). |
 | `youtube_credentials.pickle` | Stored OAuth tokens after first login (local only; not in git). |
-| `vercel.json` / `runtime.txt` / `.vercelignore` | Vercel deployment. |
+| `runtime.txt` / `.vercelignore` | Vercel deployment helpers. |
 | `.env.example` | Example environment variables (copy to `.env` locally). |
 
 ### Tech stack
@@ -148,7 +148,7 @@ Open **http://127.0.0.1:5000** (or the port shown in the terminal). Authenticate
 
 ## Deploy on Vercel
 
-The repo includes **`vercel.json`**, **`runtime.txt`**, and **`.vercelignore`** so you can deploy the Flask app as a serverless Python project.
+The repo includes **`runtime.txt`** and **`.vercelignore`**. Vercel detects **Flask** from **`app.py`** (zero-config). Do not add a legacy `vercel.json` with `@vercel/python` builds unless you have a specific reason—it often breaks Flask on current Vercel.
 
 ### Limitations on Vercel
 
@@ -177,14 +177,15 @@ The repo includes **`vercel.json`**, **`runtime.txt`**, and **`.vercelignore`** 
 npx vercel
 ```
 
-### Files added for Vercel
+### Files for Vercel
 
 | File | Purpose |
 |------|--------|
-| `vercel.json` | Routes all traffic to the Flask entry (`app.py`). |
 | `runtime.txt` | Python version for the build. |
 | `.vercelignore` | Skips venv, secrets, and local data from uploads. |
 | `.env.example` | Lists env vars to mirror in the Vercel dashboard. |
+
+After deploy, open **`/health`** — expect `{"status":"ok"}`. If you see a generic 500 on **Authenticate YouTube**, check Vercel **Function logs**; common causes are invalid **`GOOGLE_CLIENT_SECRET_JSON`** (must be valid JSON) or a bad **`PUBLIC_BASE_URL`** for custom domains.
 
 ---
 

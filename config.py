@@ -57,14 +57,35 @@ def load_google_client_config() -> dict:
     Load Google OAuth client JSON (web or installed) from file or GOOGLE_CLIENT_SECRET_JSON env.
     """
     if CREDENTIALS_FILE.exists():
-        return json.loads(CREDENTIALS_FILE.read_text(encoding="utf-8"))
+        text = CREDENTIALS_FILE.read_text(encoding="utf-8")
+        return _parse_client_secret_json(text)
+
     raw = os.environ.get("GOOGLE_CLIENT_SECRET_JSON", "").strip()
     if not raw:
         raise FileNotFoundError(
             "Missing OAuth client config. Add client_secret.json locally or set "
             "GOOGLE_CLIENT_SECRET_JSON in the environment (Vercel)."
         )
-    return json.loads(raw)
+    return _parse_client_secret_json(raw)
+
+
+def _parse_client_secret_json(text: str) -> dict:
+    """Parse client JSON; strip BOM; tolerate common Vercel paste mistakes."""
+    text = text.lstrip("\ufeff").strip()
+    if not text.startswith("{"):
+        import base64
+
+        try:
+            text = base64.b64decode(text).decode("utf-8")
+        except Exception:
+            pass
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        raise ValueError(
+            "GOOGLE_CLIENT_SECRET_JSON is not valid JSON. Paste the full downloaded "
+            f"credentials file as one line (no surrounding quotes). Parser error: {e}"
+        ) from e
 
 
 # Ensure dirs exist (local only; /tmp on Vercel is fine at runtime)

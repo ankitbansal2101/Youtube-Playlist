@@ -6,7 +6,9 @@ import secrets
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, redirect, render_template, request, session, url_for
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+
+_ROOT = Path(__file__).resolve().parent
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -32,7 +34,9 @@ from youtube_client import (
     youtube_credentials_ready,
 )
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder=str(_ROOT / "templates"))
+# Some hosts (e.g. Vercel) run with a different CWD; explicit path finds templates.
+application = app  # WSGI alias for platforms that expect `application`
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "sonic-sesh-secret-change-in-production")
 # After Google redirects back, the browser must send the session cookie (for youtube_creds_json).
 # SameSite=None + Secure is required for that cross-site return on HTTPS (Vercel, ngrok, etc.).
@@ -62,6 +66,27 @@ def _verify_signed_oauth_state(state_param: str | None) -> bool:
         return True
     except (BadSignature, SignatureExpired):
         return False
+
+
+def _public_authorization_response() -> str:
+    """
+    Google token exchange requires the redirect_uri to match the registered HTTPS URL.
+    On Vercel, request.url may be http:// internally; rebuild with the public origin.
+    """
+    from urllib.parse import urlencode
+
+    base = get_public_base_url()
+    if not base:
+        return request.url
+    args = request.args.to_dict(flat=True)
+    query = urlencode(args)
+    path = "/auth/youtube/callback"
+    return f"{base.rstrip('/')}{path}?{query}" if query else f"{base.rstrip('/')}{path}"
+
+
+@app.route("/health")
+def health():
+    return jsonify(status="ok")
 
 
 @app.route("/")
@@ -199,7 +224,7 @@ def auth_youtube_callback():
         flow = create_web_oauth_flow(redirect_uri)
         # New Flow instance must expect the same state Google returns on the callback URL
         flow.oauth2session._state = raw_state
-        flow.fetch_token(authorization_response=request.url)
+        flow.fetch_token(authorization_response=_public_authorization_response())
         creds = flow.credentials
         session["youtube_creds_json"] = creds.to_json()
         session.modified = True
