@@ -109,6 +109,8 @@ def index():
         now=datetime.now().strftime("%Y-%m-%d"),
         is_vercel=IS_VERCEL,
         public_base_url=get_public_base_url(),
+        cleared=request.args.get("cleared"),
+        cleared_scope=request.args.get("scope"),
     )
 
 
@@ -153,6 +155,23 @@ def llm_recommendations_route():
         return redirect(url_for("index") + "?llm=ok")
     except Exception as e:
         return redirect(url_for("index") + f"?error={quote(str(e))}")
+
+
+@app.route("/clear-suggestions", methods=["POST"])
+def clear_suggestions():
+    """
+    scope=screenshots — remove weighted list from OCR and AI picks (AI depends on seeds).
+    scope=llm — remove only AI recommendations; keep screenshot suggestions.
+    """
+    scope = (request.form.get("scope") or "screenshots").strip().lower()
+    if scope == "llm":
+        session.pop("llm_recommendations", None)
+    else:
+        session.pop("suggestions", None)
+        session.pop("llm_recommendations", None)
+        scope = "screenshots"
+    session.modified = True
+    return redirect(url_for("index", cleared="1", scope=scope))
 
 
 @app.route("/playlist", methods=["POST"])

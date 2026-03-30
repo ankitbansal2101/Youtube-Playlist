@@ -5,9 +5,14 @@
 <p class="caption">Upload song screenshots → get weighted suggestions → optional AI recommendations → push to a YouTube playlist.</p>
 
 {% if is_vercel %}
-<div class="flash warning">Running on <strong>Vercel</strong>: set <code>OPENAI_API_KEY</code> so <strong>Run scraper</strong> uses OpenAI Vision (screenshots are sent to OpenAI). YouTube sign-in uses a <strong>web redirect</strong>; add your Vercel URL under Authorized redirect URIs in Google Cloud (see README).</div>
+<div class="flash warning">Running on <strong>Vercel</strong>: the server does not include <strong>Tesseract OCR</strong>, so “Run scraper” on images usually will not work here unless you add a custom layer. Use <strong>Generate AI recommendations</strong> (set <code>OPENAI_API_KEY</code>) or run scraping locally. YouTube sign-in uses a <strong>web redirect</strong>; add your Vercel URL under Authorized redirect URIs in Google Cloud (see README).</div>
 {% endif %}
 
+{% if request.args.get('cleared') %}
+<div class="flash success">
+  {% if cleared_scope == 'llm' %}AI recommendations cleared. Screenshot-based suggestions are unchanged.{% else %}Screenshot suggestions and AI picks cleared from this session.{% endif %}
+</div>
+{% endif %}
 {% if request.args.get('llm') == 'ok' %}
 <div class="flash success">AI recommendations generated. Select them below if you want them on the playlist.</div>
 {% endif %}
@@ -39,6 +44,19 @@
   {% endif %}
   <p><a href="{{ url_for('auth_youtube') }}" class="btn">Authenticate YouTube</a>{% if public_base_url %} (redirect){% else %} (opens browser){% endif %}</p>
   {% endif %}
+  {% if suggestions or llm_recommendations %}
+  <p style="margin-top: 1rem;"><strong>Clear lists</strong></p>
+  <form action="{{ url_for('clear_suggestions') }}" method="post" style="display:inline;">
+    <input type="hidden" name="scope" value="screenshots">
+    <button type="submit" class="btn secondary">Clear screenshot suggestions</button>
+  </form>
+  {% if llm_recommendations %}
+  <form action="{{ url_for('clear_suggestions') }}" method="post" style="display:inline; margin-left: 0.25rem;">
+    <input type="hidden" name="scope" value="llm">
+    <button type="submit" class="btn secondary">Clear AI picks only</button>
+  </form>
+  {% endif %}
+  {% endif %}
 </div>
 
 <h2>1. Song screenshots</h2>
@@ -64,6 +82,18 @@
 <h2>2. Suggestions</h2>
 {% if suggestions %}
 <p>Weighted suggestions (higher = appeared in more screenshots). Select songs to add to the playlist below.</p>
+<p>
+  <form action="{{ url_for('clear_suggestions') }}" method="post" style="display:inline;">
+    <input type="hidden" name="scope" value="screenshots">
+    <button type="submit" class="btn secondary">Clear screenshot suggestions &amp; AI</button>
+  </form>
+  {% if llm_recommendations %}
+  <form action="{{ url_for('clear_suggestions') }}" method="post" style="display:inline; margin-left: 0.25rem;">
+    <input type="hidden" name="scope" value="llm">
+    <button type="submit" class="btn secondary">Clear AI picks only</button>
+  </form>
+  {% endif %}
+</p>
 
 <h3>AI recommendations (optional)</h3>
 <p>Uses OpenAI from your seeds (set <code>OPENAI_API_KEY</code> in <code>.env</code> or the environment). Re-run scraper clears previous AI picks.</p>
