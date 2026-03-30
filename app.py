@@ -2,10 +2,12 @@
 Flask UI: upload screenshots → scrape → weighted suggestions → create YouTube playlist.
 """
 import os
+import secrets
 from datetime import datetime
 from pathlib import Path
 
 from flask import Flask, redirect, render_template, request, session, url_for
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from config import (
@@ -32,10 +34,34 @@ from youtube_client import (
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "sonic-sesh-secret-change-in-production")
-if IS_VERCEL:
+# After Google redirects back, the browser must send the session cookie (for youtube_creds_json).
+# SameSite=None + Secure is required for that cross-site return on HTTPS (Vercel, ngrok, etc.).
+_public_base = get_public_base_url()
+if _public_base and _public_base.lower().startswith("https://"):
     app.config["SESSION_COOKIE_SECURE"] = True
-    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_SAMESITE"] = "None"
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+_OAUTH_STATE_SALT = "youtube-oauth-state-v1"
+_OAUTH_STATE_MAX_AGE = 900  # 15 minutes
+
+
+def _oauth_state_signer():
+    return URLSafeTimedSerializer(app.secret_key, salt=_OAUTH_STATE_SALT)
+
+
+def _make_signed_oauth_state() -> str:
+    return _oauth_state_signer().dumps({"n": secrets.token_hex(16)})
+
+
+def _verify_signed_oauth_state(state_param: str | None) -> bool:
+    if not state_param:
+        return False
+    try:
+        _oauth_state_signer().loads(state_param, max_age=_OAUTH_STATE_MAX_AGE)
+        return True
+    except (BadSignature, SignatureExpired):
+        return False
 
 
 @app.route("/")
@@ -139,13 +165,14 @@ def auth_youtube():
         redirect_uri = base.rstrip("/") + "/auth/youtube/callback"
         try:
             flow = create_web_oauth_flow(redirect_uri)
-            authorization_url, state = flow.authorization_url(
+            signed_state = _make_signed_oauth_state()
+            authorization_url, _ = flow.authorization_url(
                 access_type="offline",
                 include_granted_scopes="true",
                 prompt="consent",
+                state=signed_state,
             )
-            session["oauth_state"] = state
-            session["oauth_redirect_uri"] = redirect_uri
+            session.modified = True
             return redirect(authorization_url)
         except Exception as e:
             return redirect(url_for("index") + f"?error={request.quote(str(e))}")
@@ -164,16 +191,18 @@ def auth_youtube_callback():
     base = get_public_base_url()
     if not base:
         return redirect(url_for("index") + "?error=oauth")
-    if request.args.get("state") != session.get("oauth_state"):
+    raw_state = request.args.get("state")
+    if not _verify_signed_oauth_state(raw_state):
         return redirect(url_for("index") + "?error=oauth_state")
-    redirect_uri = session.get("oauth_redirect_uri") or (base.rstrip("/") + "/auth/youtube/callback")
+    redirect_uri = base.rstrip("/") + "/auth/youtube/callback"
     try:
         flow = create_web_oauth_flow(redirect_uri)
+        # New Flow instance must expect the same state Google returns on the callback URL
+        flow.oauth2session._state = raw_state
         flow.fetch_token(authorization_response=request.url)
         creds = flow.credentials
         session["youtube_creds_json"] = creds.to_json()
-        session.pop("oauth_state", None)
-        session.pop("oauth_redirect_uri", None)
+        session.modified = True
         return redirect(url_for("index") + "?auth=ok")
     except Exception as e:
         return redirect(url_for("index") + f"?error={request.quote(str(e))}")
