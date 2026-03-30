@@ -4,11 +4,6 @@
 <h1>Sonic Sesh</h1>
 <p class="caption">Upload song screenshots → get weighted suggestions → optional AI recommendations → push to a YouTube playlist.</p>
 
-<div class="flash warning"><strong>Run scraper</strong> reads screenshots with <strong>OpenAI Vision</strong> — set <code>OPENAI_API_KEY</code> in <code>.env</code> or your host (local and Vercel).</div>
-{% if is_vercel %}
-<div class="flash warning">Running on <strong>Vercel</strong>: YouTube sign-in uses a <strong>web redirect</strong>; add your Vercel URL under Authorized redirect URIs in Google Cloud (see README).</div>
-{% endif %}
-
 {% if request.args.get('cleared') %}
 <div class="flash success">
   {% if cleared_scope == 'llm' %}AI recommendations cleared. Screenshot-based suggestions are unchanged.{% else %}Screenshot suggestions and AI picks cleared from this session.{% endif %}
