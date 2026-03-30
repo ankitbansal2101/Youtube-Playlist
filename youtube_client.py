@@ -39,10 +39,13 @@ def create_web_oauth_flow(redirect_uri: str):
     """Flow for browser redirect (Vercel / HTTPS)."""
     raw = load_google_client_config()
     cfg = _client_config_for_web_flow(raw, redirect_uri)
+    # PKCE stores code_verifier on the Flow instance. We create a new Flow on callback,
+    # so PKCE must be off or token exchange fails with "Missing code verifier".
     return google_auth_oauthlib.flow.Flow.from_client_config(
         cfg,
         scopes=YOUTUBE_SCOPES,
         redirect_uri=redirect_uri,
+        autogenerate_code_verifier=False,
     )
 
 

@@ -5,6 +5,7 @@ import os
 import secrets
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
 
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 
@@ -151,7 +152,7 @@ def llm_recommendations_route():
         session["llm_recommendations"] = recs
         return redirect(url_for("index") + "?llm=ok")
     except Exception as e:
-        return redirect(url_for("index") + f"?error={request.quote(str(e))}")
+        return redirect(url_for("index") + f"?error={quote(str(e))}")
 
 
 @app.route("/playlist", methods=["POST"])
@@ -177,7 +178,7 @@ def create_playlist():
         session["playlist_failed"] = len(failed)
         return redirect(url_for("index"))
     except Exception as e:
-        return redirect(url_for("index") + f"?error={request.quote(str(e))}")
+        return redirect(url_for("index") + f"?error={quote(str(e))}")
 
 
 @app.route("/auth/youtube")
@@ -200,7 +201,7 @@ def auth_youtube():
             session.modified = True
             return redirect(authorization_url)
         except Exception as e:
-            return redirect(url_for("index") + f"?error={request.quote(str(e))}")
+            return redirect(url_for("index") + f"?error={quote(str(e))}")
 
     if not CREDENTIALS_FILE.exists():
         return redirect(url_for("index") + "?error=no_client_secret")
@@ -208,7 +209,7 @@ def auth_youtube():
         authenticate_youtube()
         return redirect(url_for("index") + "?auth=ok")
     except Exception as e:
-        return redirect(url_for("index") + f"?error={request.quote(str(e))}")
+        return redirect(url_for("index") + f"?error={quote(str(e))}")
 
 
 @app.route("/auth/youtube/callback")
@@ -230,7 +231,7 @@ def auth_youtube_callback():
         session.modified = True
         return redirect(url_for("index") + "?auth=ok")
     except Exception as e:
-        return redirect(url_for("index") + f"?error={request.quote(str(e))}")
+        return redirect(url_for("index") + f"?error={quote(str(e))}")
 
 
 if __name__ == "__main__":
