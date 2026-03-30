@@ -5,7 +5,7 @@
 <p class="caption">Upload song screenshots → get weighted suggestions → optional AI recommendations → push to a YouTube playlist.</p>
 
 {% if is_vercel %}
-<div class="flash warning">Running on <strong>Vercel</strong>: the server does not include <strong>Tesseract OCR</strong>, so “Run scraper” on images usually will not work here unless you add a custom layer. Use <strong>Generate AI recommendations</strong> (set <code>OPENAI_API_KEY</code>) or run scraping locally. YouTube sign-in uses a <strong>web redirect</strong>; add your Vercel URL under Authorized redirect URIs in Google Cloud (see README).</div>
+<div class="flash warning">Running on <strong>Vercel</strong>: set <code>OPENAI_API_KEY</code> so <strong>Run scraper</strong> uses OpenAI Vision (screenshots are sent to OpenAI). YouTube sign-in uses a <strong>web redirect</strong>; add your Vercel URL under Authorized redirect URIs in Google Cloud (see README).</div>
 {% endif %}
 
 {% if request.args.get('llm') == 'ok' %}

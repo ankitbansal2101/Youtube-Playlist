@@ -21,9 +21,11 @@ PICKLE_FILE = PROJECT_ROOT / "youtube_credentials.pickle"
 # YouTube
 YOUTUBE_SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
 
-# Scraper
+# Scraper / vision (screenshots → song list)
 MIN_SONG_LENGTH = 3
 MAX_SONG_LENGTH = 200
+# Vision model for reading screenshot text (replaces Tesseract when OPENAI_API_KEY is set)
+OPENAI_VISION_MODEL = os.environ.get("OPENAI_VISION_MODEL", "gpt-4o-mini")
 
 # LLM (optional)
 try:
