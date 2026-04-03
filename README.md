@@ -46,9 +46,10 @@ No song list is saved on disk: each time you run the scraper, it looks at **all 
 
 ## OpenAI (`OPENAI_API_KEY`)
 
-- **Screenshot reading:** Each image is sent to **OpenAI Vision** (`scraper.py`). Set **`OPENAI_VISION_MODEL`** if you want something other than the default `gpt-4o-mini`. **`OPENAI_VISION_MAX_SIDE`** (default `2048`) limits image size before upload to save tokens.
+- **Screenshot reading:** Each image is sent to **OpenAI Vision** (`scraper.py`) with **`detail: high`** for sharper text on phone UI. Default model is **`gpt-4o`**. If extraction is weak, try **`OPENAI_VISION_MODEL=gpt-4.1`** (when your account supports it). Use **`gpt-4o-mini`** to save cost. **`OPENAI_VISION_MAX_SIDE`** (default `2048`) limits image size before upload to save tokens.
 - **AI recommendations (optional):** After weighted suggestions exist, the app can call OpenAI with **text only** (song titles) for more picks. Optional **`OPENAI_RECOMMEND_MODEL`** (default `gpt-4o-mini`).
-- **Privacy / cost:** Screenshots and text go to OpenAI’s API; you pay per request. Re-running **Run scraper** clears stored AI suggestions for that session.
+- **Privacy / cost:** Screenshots and text go to OpenAI’s API; you pay per request. If the API returns **insufficient quota**, add billing/credits at [OpenAI billing](https://platform.openai.com/account/billing) — that is not a bug in the app. Re-running **Run scraper** clears stored AI suggestions for that session.
+- **Wrong key / credits mismatch:** `OPENAI_API_KEY` is read via **`get_openai_api_key()`** in `config.py`, which **reloads `.env` with override** on every Vision/LLM call so the key in the project file always beats a stale shell export. To see which key is active (masked), run: `python scripts/show_openai_key.py`. In the OpenAI dashboard, confirm that same key under [API keys](https://platform.openai.com/api-keys) belongs to the **organization** where you added credit.
 
 Implementation: `scraper.py` (Vision JSON `songs` array), `llm_recommendations.py` (recommendations from seeds).
 
@@ -217,5 +218,5 @@ You can schedule this with cron, Task Scheduler, or a small runner script.
 
 ## Notes
 
-- **Screenshot reading:** OpenAI Vision costs per image; tune **`OPENAI_VISION_MODEL`** / **`OPENAI_VISION_MAX_SIDE`** if needed.
+- **Screenshot reading:** Vision costs per image (default **`gpt-4o`**); use **`gpt-4o-mini`** via **`OPENAI_VISION_MODEL`** if you need lower cost. Tune **`OPENAI_VISION_MAX_SIDE`** if needed.
 - **YouTube quota:** Creating playlists and searching consume API quota; for heavy or shared use, monitor usage in the Cloud Console.

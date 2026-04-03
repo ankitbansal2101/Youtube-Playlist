@@ -24,13 +24,30 @@ YOUTUBE_SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
 # Scraper (OpenAI Vision only — see OPENAI_API_KEY, OPENAI_VISION_MODEL)
 MIN_SONG_LENGTH = 3
 MAX_SONG_LENGTH = 200
+# Vision default; use gpt-4.1 for denser UI if your key supports it (set OPENAI_VISION_MODEL).
+OPENAI_VISION_MODEL_DEFAULT = "gpt-4o"
 
-# LLM (optional)
-try:
-    from dotenv import load_dotenv
-    load_dotenv(PROJECT_ROOT / ".env")
-except ImportError:
-    pass
+def reload_dotenv_from_project() -> None:
+    """Load ``PROJECT_ROOT/.env`` with override so file values beat the shell (local dev)."""
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv(PROJECT_ROOT / ".env", override=True)
+    except ImportError:
+        pass
+
+
+reload_dotenv_from_project()
+
+
+def get_openai_api_key() -> str:
+    """
+    Return ``OPENAI_API_KEY`` after re-reading ``.env`` so the key in the project file
+    is always used when present (overrides a stale ``export OPENAI_API_KEY=...``).
+    On Vercel, ``.env`` is usually absent; the dashboard env var is used instead.
+    """
+    reload_dotenv_from_project()
+    return (os.environ.get("OPENAI_API_KEY") or "").strip()
 
 
 def get_public_base_url() -> str | None:

@@ -21,10 +21,18 @@ from config import (
     get_public_base_url,
     has_client_secret_config,
 )
-from scraper import scrape_directory, scrape_uploaded_files
+from scraper import VisionOpenAIQuotaError, scrape_directory, scrape_uploaded_files
+
+_SCRAPE_EXT = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+
+
+def _scrapeable_image_count() -> int:
+    if not SCREENSHOTS_DIR.exists():
+        return 0
+    return sum(1 for p in SCREENSHOTS_DIR.iterdir() if p.suffix.lower() in _SCRAPE_EXT)
 from suggestions import (
-    get_suggestions_from_directory,
-    get_suggestions_from_uploads,
+    aggregate_directory_with_raw_count,
+    aggregate_uploads_with_raw_count,
 )
 from llm_recommendations import generate_recommendations
 from youtube_client import (
@@ -119,20 +127,39 @@ def scrape():
     min_weight = int(request.form.get("min_weight", 1))
     mode = request.form.get("mode", "folder")
 
-    if mode == "upload":
-        files = request.files.getlist("screenshots")
-        paths = []
-        for f in files:
-            if f and f.filename:
-                path = SCREENSHOTS_DIR / Path(f.filename).name
-                f.save(str(path))
-                paths.append(path)
-        if paths:
-            suggestions = get_suggestions_from_uploads(paths, min_weight=min_weight)
+    paths: list = []
+    try:
+        if mode == "upload":
+            files = request.files.getlist("screenshots")
+            for f in files:
+                if f and f.filename:
+                    path = SCREENSHOTS_DIR / Path(f.filename).name
+                    f.save(str(path))
+                    paths.append(path)
+            if not paths:
+                return redirect(url_for("index") + "?error=no_upload")
+            suggestions, raw_lines = aggregate_uploads_with_raw_count(
+                paths, min_weight=min_weight
+            )
         else:
-            suggestions = []
-    else:
-        suggestions = get_suggestions_from_directory(SCREENSHOTS_DIR, min_weight=min_weight)
+            if _scrapeable_image_count() == 0:
+                return redirect(url_for("index") + "?error=no_screenshots")
+            suggestions, raw_lines = aggregate_directory_with_raw_count(
+                SCREENSHOTS_DIR, min_weight=min_weight
+            )
+    except VisionOpenAIQuotaError:
+        session.pop("suggestions", None)
+        session.pop("llm_recommendations", None)
+        return redirect(url_for("index") + "?error=openai_quota")
+
+    if not suggestions and raw_lines == 0:
+        session.pop("suggestions", None)
+        session.pop("llm_recommendations", None)
+        return redirect(url_for("index") + "?error=vision_empty")
+    if not suggestions and raw_lines > 0:
+        session.pop("suggestions", None)
+        session.pop("llm_recommendations", None)
+        return redirect(url_for("index") + "?error=min_weight_no_match")
 
     session["suggestions"] = [(s[0], s[1], len(s[2])) for s in suggestions]
     session.pop("llm_recommendations", None)

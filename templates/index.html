@@ -26,7 +26,12 @@
   {% if error == 'oauth_state' %}OAuth state mismatch—try signing in again.{% endif %}
   {% if error == 'oauth' %}OAuth callback failed (check redirect URI in Google Cloud).{% endif %}
   {% if error == 'no_suggestions_for_llm' %}Run the scraper first, then generate AI recommendations.{% endif %}
-  {% if error not in ['auth', 'no_songs', 'no_client_secret', 'no_suggestions_for_llm', 'oauth_state', 'oauth'] %}{{ error|e }}{% endif %}
+  {% if error == 'no_upload' %}Choose at least one image to upload, then run the scraper again.{% endif %}
+  {% if error == 'no_screenshots' %}No images found in the screenshots folder. Add PNG/JPEG/WebP files or switch to upload.{% endif %}
+  {% if error == 'openai_quota' %}OpenAI returned <strong>insufficient quota</strong> (billing). The scraper did not fail because of your screenshots — add a payment method or credits at <a href="https://platform.openai.com/account/billing" target="_blank" rel="noopener">platform.openai.com/account/billing</a>, then try again.{% endif %}
+  {% if error == 'vision_empty' %}No songs were extracted from your images. Check <code>OPENAI_API_KEY</code>, try <code>OPENAI_VISION_MODEL=gpt-4.1</code> in <code>.env</code>, and look at the terminal for Vision errors.{% endif %}
+  {% if error == 'min_weight_no_match' %}Songs were found but none met your <strong>min weight</strong>. Lower min weight and run again.{% endif %}
+  {% if error not in ['auth', 'no_songs', 'no_client_secret', 'no_suggestions_for_llm', 'oauth_state', 'oauth', 'no_upload', 'no_screenshots', 'vision_empty', 'min_weight_no_match', 'openai_quota'] %}{{ error|e }}{% endif %}
 </div>
 {% endif %}
 

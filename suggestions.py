@@ -55,3 +55,22 @@ def get_suggestions_from_uploads(
     """Scrape uploaded files then return weighted suggestions."""
     results = scrape_uploaded_files(paths)
     return aggregate_songs(results, min_weight=min_weight)
+
+
+def aggregate_uploads_with_raw_count(
+    paths: List[Path],
+    min_weight: int = 1,
+) -> tuple[List[Tuple[str, int, List[Path]]], int]:
+    """Like get_suggestions_from_uploads; also returns count of raw lines before min_weight filter."""
+    results = scrape_uploaded_files(paths)
+    raw_count = sum(len(lines) for _, lines in results)
+    return aggregate_songs(results, min_weight=min_weight), raw_count
+
+
+def aggregate_directory_with_raw_count(
+    directory: Path = None,
+    min_weight: int = 1,
+) -> tuple[List[Tuple[str, int, List[Path]]], int]:
+    results = scrape_directory(directory)
+    raw_count = sum(len(lines) for _, lines in results)
+    return aggregate_songs(results, min_weight=min_weight), raw_count

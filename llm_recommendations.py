@@ -1,21 +1,24 @@
 """
 Use an LLM to suggest additional songs based on songs extracted from screenshots.
-Requires OPENAI_API_KEY (environment or .env).
+Requires OPENAI_API_KEY in project .env (or host env when .env is not deployed).
 """
 import json
 import os
 import re
 from typing import List
 
+from config import get_openai_api_key
+
+
 def _client():
     try:
         from openai import OpenAI
     except ImportError as e:
         raise ImportError("Install the openai package: pip install openai") from e
-    key = os.environ.get("OPENAI_API_KEY", "").strip()
+    key = get_openai_api_key()
     if not key:
         raise ValueError(
-            "Set OPENAI_API_KEY in your environment or in a .env file in the project folder."
+            "Set OPENAI_API_KEY in the project .env file in the project folder."
         )
     return OpenAI(api_key=key)
 
